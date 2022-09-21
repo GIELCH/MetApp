@@ -228,8 +228,10 @@ shinyServer(function(input, output, session) {
   })
   
   
-  
-### Visualization panel
+  # # #
+  ### Visualization panel
+  # # #
+
   
   callModule(titlePanelMod, id = "t4")
   shinyDirChoose(input, "dir", roots = c(home = normalizePath("~")))
@@ -245,160 +247,166 @@ shinyServer(function(input, output, session) {
   })
   
   #Update the metabolites list when the output folder change
-  observeEvent(path(), {
-    Product = reactive({
-      validate(need( length(path()) > 0, "Choose a directory"))
-      total_table = readr::read_tsv(list.files(path(), pattern = "out.*\\.tsv$", full.names = T))
-      num_col = names(Filter(is.numeric, total_table))
-      total_table[num_col] = as_tibble(apply(total_table[num_col], 2, function(col) round(col, 3)))
-      total_table$intensity = scales::scientific(total_table$intensity)
-      total_table = plyr::rename(total_table, c("name"="Name", "formula"="Formula", "polarity"="Polarity", "adduct"="Adduct", "mz"="m/z", 
-                                           "diff"="Change", "rt"="RT", "intensity"="Intensity", "abscore"="iAScore", 
-                                           "dotp_ms2"="MS2 dotp", "common_ms2_peak"="MS2p", "mono_ppm"="Delta m/z (ppm)",
-                                           "index_peak"="Index", "nb_transfo"="Nb Transfo", "score"="Score"))
-      total_table %>%
-        arrange(desc(Score))
-    })
-    
+  Product = reactive({
+    validate(need( length(path()) > 0, "Choose a directory"))
+    total_table = readr::read_tsv(list.files(path(), pattern = "out.*\\.tsv$", full.names = T))
+    num_col = names(Filter(is.numeric, total_table))
+    total_table[num_col] = as_tibble(apply(total_table[num_col], 2, function(col) round(col, 3)))
+    total_table$intensity = scales::scientific(total_table$intensity)
+    total_table = plyr::rename(total_table, c("name"="Name", "formula"="Formula", "polarity"="Polarity", "adduct"="Adduct", "mz"="m/z", 
+                                         "diff"="Change", "rt"="RT", "intensity"="Intensity", "abscore"="iAScore", 
+                                         "dotp_ms2"="MS2 dotp", "common_ms2_peak"="MS2p", "mono_ppm"="Delta m/z (ppm)",
+                                         "index_peak"="Index", "nb_transfo"="Nb Transfo", "score"="Score"))
+    total_table %>%
+      arrange(desc(Score))
+  })
+  
+  output$header = renderText({ 
     if(length(path()) > 0){
-      output$header = renderText({ paste0("Currently open: ", unique(Product()$Name) ) })
+      paste0("Currently open: ", unique(Product()$Name) ) 
     }else{
-      output$header = renderText({"Select the output folder containing the file \"out_...tsv\" :"})
+      return("Select the output folder containing the file \"out_...tsv\" :")
     }
+  })
+  
+  observe({ 
+    shinyjs::toggleState(id = "report", condition = length(path()) & length(input$table_rows_selected)) 
     
-    
-    
-    observe({ shinyjs::toggleState(id = "report", condition = length(path()) & length(input$table_rows_selected)) 
+    output$report = downloadHandler(
+      filename = "report.pdf",
       
-      output$report = downloadHandler(
-        filename = "report.pdf",
-        
-        content = function(file){
-          rmarkdown::render("report_template.Rmd", output_file = file , quiet = T)
-        }
-      )
-    })
-    
+      content = function(file){
+        rmarkdown::render("report_template.Rmd", output_file = file , quiet = T)
+      }
+    )
     updateCheckboxGroupInput(session, "columns", choices = names(Product()),
                              selected =c("Formula", "Polarity", "Change", "m/z", "RT", "MS2p", "iAScore",
                                          "MS2 dotp", "Delta m/z (ppm)", "Intensity", "Score"))
-    #Print table
-    output$table <- DT::renderDataTable({
-      datatable(Product()[, input$columns], rownames = F, selection = "multiple", 
-                options = list(scrollX = TRUE, searchHighlight = T))
-    })
-    
-    #Observe click event on table rows
-    observeEvent(input$table_cell_clicked, {
-      if(length(input$table_cell_clicked) > 0){
-        data = Product()[input$table_cell_clicked$row, ]
+  })
+  
+  #Print table
+  output$table <- DT::renderDataTable({
+    need(length(path()) > 0, "")
+    datatable(Product()[, input$columns], rownames = F, selection = "multiple", 
+              options = list(scrollX = TRUE, searchHighlight = T))
+  })
+  
+  #Observe click event on table rows
+  observeEvent(input$table_cell_clicked, {
+    need(Product(), "")
+    if(length(input$table_cell_clicked) > 0){
+      data = Product()[input$table_cell_clicked$row, ]
+      
+      form = data$Formula
+      peak = data$Index
+      find_figure = list.files(path(), pattern = paste0(form, "_", peak), recursive = T, full.names = T)
+      
+      polar = ifelse(data$Polarity=="Positive mode", "POS", "NEG")
+      updateTabsetPanel(session, "polarity", selected = polar)
+      
+      updateSelectInput(session, input$polarity, selected = form )
+      observeEvent(input[[input$polarity]], {
         
-        form = data$Formula
-        peak = data$Index
-        find_figure = list.files(path(), pattern = paste0(form, "_", peak), recursive = T, full.names = T)
-        
-        polar = ifelse(data$Polarity=="Positive mode", "POS", "NEG")
-        updateTabsetPanel(session, "polarity", selected = polar)
-        
-        updateSelectInput(session, input$polarity, selected = form )
-        observeEvent(input[[input$polarity]], {
-          
-          updateSelectInput(session, paste0(input$polarity, "_peak"), selected = peak)
-        })
-        
-      }
-    })
-    
-    
-    ### POS ###
-    
-    filesname_pos = list.files(path(), recursive = T, pattern = ".*_POS.svg|.*plus.*svg|.*_POS.png|.*plus.*png")
-    metabolites = unique(lapply(basename(filesname_pos), function(x) strsplit(x, '_')[[1]][1]))
+        updateSelectInput(session, paste0(input$polarity, "_peak"), selected = peak)
+      })
+      
+    }
+  })
+  
+  ### POS ###
+  
+  filesname_pos = reactive({ 
+    need(length(path()), "")
+    list.files(path(), recursive = T, pattern = ".*_POS.svg|.*plus.*svg|.*_POS.png|.*plus.*png")
+  })
+  
+  observe({
+    metabolites = unique(lapply(basename(filesname_pos()), function(x) strsplit(x, '_')[[1]][1]))
     
     updateSelectInput(session, "POS", choices = metabolites )
+  })
+  
+  #Update the chromatogram peaks list
+  observeEvent(input$POS, {
     
-    #Update the chromatogram peaks list
-    observeEvent(input$POS, {
-      
-      filesname_pos = list.files(path(), recursive = T, pattern = paste0("^", input$POS, "_.*_POS|^", input$POS,"_.*plus"))
-      peaks = unique(lapply(basename(filesname_pos), function(x) strsplit(x, '_')[[1]][2]))
-      
-      updateSelectInput(session, "POS_peak", choices = peaks )
-      
-    })
+    current_metabolite_file = list.files(path(), recursive = T, pattern = paste0("^", input$POS, "_.*_POS|^", input$POS,"_.*plus"))
+    peaks = unique(lapply(basename(current_metabolite_file), function(x) strsplit(x, '_')[[1]][2]))
     
-    #Update the POS page image
-    observeEvent(input$POS_peak, {
-      
-      output$figure_POS = renderImage({
-        validate(need( length(path()) > 0, "Select directory"))
-        filename = grep(paste0(input$POS, "_", input$POS_peak, "_"), filesname_pos, value = T)
-        
-        list(src = file.path(path(), filename),
-             alt = "Missing figure in pos",
-             width = 800,
-             height = 800)
-      }, deleteFile = F)
-      
-      
-      output$table_POS <- renderTable({
-        tabsname_pos = list.files(path(), recursive = T, 
-                                  pattern = paste0(input$POS, "_", input$POS_peak, ".*_POS.tsv|",
-                                                   input$POS,"_", input$POS_peak, "_.*plus.*tsv"))
-        validate(need( length(path()) > 0, "Select a directory"),
-                 need( length(tabsname_pos) == 1, "No MS2 table to show"))
-        table=readr::read_tsv(file.path(path(), tabsname_pos))
-        table
-      })
-      
-    })
-    
-    
-    ### NEG ###
-    
-    filesname_neg = list.files(path(), recursive = T, pattern = ".*_NEG.png|.*minus.*png|.*_NEG.svg|.*minus.*svg")
-    metabolites = unique(lapply(basename(filesname_neg), function(x) strsplit(x, '_')[[1]][1]))
-    
-    updateSelectInput(session, "NEG", choices = metabolites )
-    
-    
-    #Update the chromatogram peaks list
-    observeEvent(input$NEG, {
-      
-      filesname_neg = list.files(path(), recursive = T, pattern = paste0("^", input$NEG,".*_NEG|^", input$NEG, "_.*minus"))
-      peaks = unique(lapply(basename(filesname_neg), function(x) strsplit(x, '_')[[1]][2]))
-      
-      updateSelectInput(session, "NEG_peak", choices = peaks )
-      
-    })
-    
-    #Update the NEG page image
-    observeEvent(input$NEG_peak, {
-      
-      output$figure_NEG = renderImage({
-        validate(need( length(path()) > 0, ""))
-        filename = grep(paste0(input$NEG, "_", input$NEG_peak, "_"), filesname_neg, value=T)
-        
-        list(src = file.path(path(), filename),
-             alt = "Missing figure in NEG",
-             width = 800,
-             height = 800)
-      }, deleteFile = F)
-      
-      
-      output$table_NEG <- renderTable({
-        tabsname_neg = list.files(path(), recursive = T, 
-                                  pattern = paste0(input$NEG, "_", input$NEG_peak, ".*_NEG.tsv|",
-                                                   input$NEG,"_", input$NEG_peak, "_.*minus.*tsv"))
-        validate(need( length(path()) > 0, "Select a directory"),
-                 need( length(tabsname_neg) == 1, "No MS2 table to show"))
-        table=readr::read_tsv(file.path(path(), tabsname_neg))
-        table
-      })
-      
-      
-    })
+    updateSelectInput(session, "POS_peak", choices = peaks )
     
   })
   
+  #Update the POS page image
+  output$figure_POS = renderImage({
+    validate(need( length(path()) > 0, "Select directory"))
+    filename = grep(paste0(input$POS, "_", input$POS_peak, "_"), filesname_pos(), value = T)
+    
+    list(src = file.path(path(), filename),
+         alt = "Missing figure in pos",
+         width = 800,
+         height = 800)
+  }, deleteFile = F)
+  
+  
+  output$table_POS <- renderTable({
+    tabsname_pos = list.files(path(), recursive = T, 
+                              pattern = paste0(input$POS, "_", input$POS_peak, ".*_POS.tsv|",
+                                               input$POS,"_", input$POS_peak, "_.*plus.*tsv"))
+    validate(need( length(path()) > 0, "Select a directory"),
+             need( length(tabsname_pos) == 1, "No MS2 table to show"))
+    table=readr::read_tsv(file.path(path(), tabsname_pos))
+    table
+  })
+  
+    
+  ### NEG ###
+  
+  filesname_neg = reactive({
+    need(length(path()), "")
+    list.files(path(), recursive = T, pattern = ".*_NEG.png|.*minus.*png|.*_NEG.svg|.*minus.*svg")
+  })
+  
+  observe({
+    metabolites = unique(lapply(basename(filesname_neg()), function(x) strsplit(x, '_')[[1]][1]))
+    
+    updateSelectInput(session, "NEG", choices = metabolites )
+    
+  })
+  
+  
+  #Update the chromatogram peaks list
+  observeEvent(input$NEG, {
+    
+    current_metabolite_file = list.files(path(), recursive = T, pattern = paste0("^", input$NEG,".*_NEG|^", input$NEG, "_.*minus"))
+    peaks = unique(lapply(basename(current_metabolite_file), function(x) strsplit(x, '_')[[1]][2]))
+    
+    updateSelectInput(session, "NEG_peak", choices = peaks )
+    
+  })
+  
+  #Update the NEG page image
+    
+  output$figure_NEG = renderImage({
+    validate(need( length(path()) > 0, ""))
+    filename = grep(paste0(input$NEG, "_", input$NEG_peak, "_"), filesname_neg(), value=T)
+    
+    list(src = file.path(path(), filename),
+         alt = "Missing figure in NEG",
+         width = 800,
+         height = 800)
+  }, deleteFile = F)
+  
+  
+  output$table_NEG <- renderTable({
+    tabsname_neg = list.files(path(), recursive = T, 
+                              pattern = paste0(input$NEG, "_", input$NEG_peak, ".*_NEG.tsv|",
+                                               input$NEG,"_", input$NEG_peak, "_.*minus.*tsv"))
+    validate(need( length(path()) > 0, "Select a directory"),
+             need( length(tabsname_neg) == 1, "No MS2 table to show"))
+    table=readr::read_tsv(file.path(path(), tabsname_neg))
+    table
+  })
+    
+  
 })
+  
