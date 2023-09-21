@@ -11,6 +11,14 @@ library(shiny)
 
 jobs=list()
 
+if(.Platform$OS.type == "windows"){
+  homePath = normalizePath("/")
+  defaultRscript = "Rscript.exe"
+}else{
+  homePath = normalizePath("~")
+  defaultRscript = "Rscript"
+}
+
 # Define server logic required to draw a histogram
 shinyServer(function(input, output, session) {
   
@@ -21,7 +29,7 @@ shinyServer(function(input, output, session) {
   input_data = reactiveValues(Rscript = "", infile = "", outdir = "", config = "")
   
   # Rscript path
-  shinyFileChoose(input, "Rscript", roots = c(home = normalizePath("/")))
+  shinyFileChoose(input, "Rscript", roots = c(home = homePath))
   
   observeEvent(input$Rscript, { 
     validate(need( length(unlist(input$Rscript[1])) > 1, "" ))
@@ -30,7 +38,7 @@ shinyServer(function(input, output, session) {
   })
   
   # INPUT file button
-  shinyFileChoose(input, "input", roots = c(home = normalizePath("~")))
+  shinyFileChoose(input, "input", roots = c(home = homePath))
   
   observeEvent(input$input, { 
     validate(need( length(unlist(input$input[1])) > 1, "" ))
@@ -40,7 +48,7 @@ shinyServer(function(input, output, session) {
   
   
   # OUT PATH directory button
-  shinyDirChoose(input, "outdir", roots = c(home = normalizePath("~")))
+  shinyDirChoose(input, "outdir", roots = c(home = homePath))
  
   observeEvent(input$outdir, { 
     validate(need( length(unlist(input$outdir[1])) > 1, "" ))
@@ -49,7 +57,7 @@ shinyServer(function(input, output, session) {
   })
   
   # OUT PATH directory button
-  shinyFileChoose(input, "config", roots = c(home = normalizePath("~")))
+  shinyFileChoose(input, "config", roots = c(home = homePath))
   
   observeEvent(input$config, { 
     validate(need( length(unlist(input$config[1])) > 1, "" ))
@@ -59,13 +67,12 @@ shinyServer(function(input, output, session) {
   
   # Update command field
   observe({
-    rscript_path = ifelse(input_data$Rscript != "", input_data$Rscript, "Rscript4") 
+    rscript_path = ifelse(input_data$Rscript != "", input_data$Rscript, defaultRscript) 
     updateTextInput(session, "command", 
                     value= paste0(rscript_path, " MetIDfyR.R -i ~", input_data$infile, 
                                   " -o ~", input_data$outdir,
                                   # Optional parameters
-                                  ifelse(input_data$config != "", paste0(" -c ~", input_data$config), ""),
-                                  ifelse(input$cores > 1,  paste0(" --cores ", input$cores), "" )) )
+                                  ifelse(input_data$config != "", paste0(" -c ~", input_data$config), "")) )
   })
   
   observe({
@@ -145,16 +152,16 @@ shinyServer(function(input, output, session) {
   # # #
   
   callModule(titlePanelMod, id = "t3")
-  configFields = c("lib_perso", "bool_phase_2", "cores", "nb_transformation", "min_peak_intensity", "mz_ppm", "rt_windows", 
+  configFields = c("lib_perso", "bool_phase_1", "bool_phase_2", "cores", "nb_transformation", "min_peak_intensity", "mz_ppm", "rt_windows", 
                    "nb_scan", "wdw_mz_ms2", "minimum_mz")
   
-  fieldsAll = c("bool_phase_2", "cores", "nb_transformation", "min_peak_intensity", "mz_ppm", 
+  fieldsAll = c("bool_phase_1", "bool_phase_2", "cores", "nb_transformation", "min_peak_intensity", "mz_ppm", 
                 "rt_windows", "nb_scan", "wdw_mz_ms2", "minimum_mz")
   fieldsSelect = c("lib_perso", "ms2_reference")
   
   
   # MS2 REFERENCE file button
-  shinyFileChoose(input, "ms2_reference", roots = c(home = normalizePath("~")))
+  shinyFileChoose(input, "ms2_reference", roots = c(home = homePath))
   ms2_tsv = reactive(input$ms2_reference)
   observeEvent(input$ms2_reference, { 
     validate(need( length(unlist(ms2_tsv()[1])) > 1, "" ))
@@ -162,7 +169,7 @@ shinyServer(function(input, output, session) {
   })
   
   # R LIBRARY directory button
-  shinyDirChoose(input, "lib_perso", roots = c(home = normalizePath("~")))
+  shinyDirChoose(input, "lib_perso", roots = c(home = homePath))
   libperso = reactive(input$lib_perso)
   observeEvent(input$lib_perso, { 
     validate(need( length(unlist(libperso()[1])) > 1, "" ))
@@ -234,10 +241,10 @@ shinyServer(function(input, output, session) {
 
   
   callModule(titlePanelMod, id = "t4")
-  shinyDirChoose(input, "dir", roots = c(home = normalizePath("~")))
+  shinyDirChoose(input, "dir", roots = c(home = homePath))
   dir = reactive(input$dir)
   path = reactive({ 
-    home = normalizePath("~")
+    home = homePath
     if(length(unlist(dir()[1])) > 1){
       
       file.path(home, paste(unlist(dir()$path[-1]), collapse = "/"))

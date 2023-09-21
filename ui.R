@@ -53,9 +53,7 @@ navbarPage("MetApp for MetIDfyR",
                     fluidRow(column(3, tags$b("Path to config file"), br(),
                                     shinyFilesButton("config", "Select config file", 
                                                      "Path to config file", multiple = F),
-                                    textOutput("select_config")), 
-                             column(2, tags$b("Number of cores to use"), 
-                                    selectInput("cores", NULL, choices = c(2:detectCores()-1)))
+                                    textOutput("select_config"))
                              ), 
                     
                     textInput("command", label="", width="200%"),
@@ -90,13 +88,15 @@ navbarPage("MetApp for MetIDfyR",
                              column(6,
                                     textInput("config_name", "Name of the config file to save", placeholder = "config"),
                                     
+                                    selectInput("bool_phase_1", "Include phase I transformations", choices = c("TRUE", "FALSE")),
                                     selectInput("bool_phase_2", "Include phase II transformations", choices = c("FALSE", "TRUE")),
                                     
                                     tags$b("Path to personal R library if required"), br(),
                                     shinyDirButton("lib_perso", "Select library", "Path to personal R library if required"),
                                     textOutput("select_lib_perso"),
                                     
-                                    selectInput("nb_transformation", "Number of transformations to perform", choices = c(1:6))
+                                    selectInput("nb_transformation", "Number of transformations to perform", choices = c(1:6)),
+                                    selectInput("cores", "Number of cores to use", choices = c(2:detectCores()-1))
                                     
                              ),
                              column(6,
