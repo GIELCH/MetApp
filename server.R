@@ -258,7 +258,7 @@ shinyServer(function(input, output, session) {
     validate(need( length(path()) > 0, "Choose a directory"))
     total_table = readr::read_tsv(list.files(path(), pattern = "out.*\\.tsv$", full.names = T))
     num_col = names(Filter(is.numeric, total_table))
-    total_table[num_col] = as_tibble(apply(total_table[num_col], 2, function(col) round(col, 3)))
+    total_table[num_col] = total_table %>% Filter(f=is.numeric) %>% round(3)
     total_table$intensity = scales::scientific(total_table$intensity)
     total_table = plyr::rename(total_table, c("name"="Name", "formula"="Formula", "polarity"="Polarity", "adduct"="Adduct", "mz"="m/z", 
                                          "diff"="Change", "rt"="RT", "intensity"="Intensity", "abscore"="iAScore", 
@@ -328,6 +328,7 @@ shinyServer(function(input, output, session) {
   })
   
   observe({
+    validate(need(any(Product()$Polarity == "Positive mode"), ""))
     metabolites = unique(lapply(basename(filesname_pos()), function(x) strsplit(x, '_')[[1]][1]))
     
     updateSelectInput(session, "POS", choices = metabolites )
@@ -345,7 +346,7 @@ shinyServer(function(input, output, session) {
   
   #Update the POS page image
   output$figure_POS = renderImage({
-    validate(need( length(path()) > 0, "Select directory"))
+    validate(need(any(Product()$Polarity == "Positive mode"), ""))
     filename = grep(paste0(input$POS, "_", input$POS_peak, "_"), filesname_pos(), value = T)
     
     list(src = file.path(path(), filename),
@@ -356,6 +357,7 @@ shinyServer(function(input, output, session) {
   
   
   output$table_POS <- renderTable({
+    validate(need(any(Product()$Polarity == "Positive mode"), ""))
     tabsname_pos = list.files(path(), recursive = T, 
                               pattern = paste0(input$POS, "_", input$POS_peak, ".*_POS.tsv|",
                                                input$POS,"_", input$POS_peak, "_.*plus.*tsv"))
@@ -369,7 +371,7 @@ shinyServer(function(input, output, session) {
   ### NEG ###
   
   filesname_neg = reactive({
-    need(length(path()), "")
+    validate(need(any(Product()$Polarity == "Negative mode"), ""))
     list.files(path(), recursive = T, pattern = ".*_NEG.png|.*minus.*png|.*_NEG.svg|.*minus.*svg")
   })
   
@@ -394,7 +396,7 @@ shinyServer(function(input, output, session) {
   #Update the NEG page image
     
   output$figure_NEG = renderImage({
-    validate(need( length(path()) > 0, ""))
+    validate(need(any(Product()$Polarity == "Negative mode"), ""))
     filename = grep(paste0(input$NEG, "_", input$NEG_peak, "_"), filesname_neg(), value=T)
     
     list(src = file.path(path(), filename),
@@ -405,6 +407,7 @@ shinyServer(function(input, output, session) {
   
   
   output$table_NEG <- renderTable({
+    validate(need(any(Product()$Polarity == "Negative mode"), ""))
     tabsname_neg = list.files(path(), recursive = T, 
                               pattern = paste0(input$NEG, "_", input$NEG_peak, ".*_NEG.tsv|",
                                                input$NEG,"_", input$NEG_peak, "_.*minus.*tsv"))
