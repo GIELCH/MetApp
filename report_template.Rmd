@@ -1,10 +1,14 @@
 ---
-title: "Metabolites report for `r unique(Product()$Name)`"
+title: "Metabolites report for `r DrugInterest()`"
 date: "`r Sys.Date()`"
+header-includes:
+- \usepackage{float}
+- \usepackage[table]{xcolor}
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{pdflscape}
 output: 
   pdf_document:
-    number_sections: true
-    df_print: kable 
 ---
 
 `r input$comment`
@@ -14,63 +18,101 @@ knitr::opts_chunk$set(echo = TRUE)
 if(!"pacman" %in% installed.packages()) install.packages("pacman")
 pacman::p_load("cowplot", "readr", "gridExtra", "tinytex", "grid", "png", "rsvg")
 
-# tinytex::install_tinytex()
+suppressMessages(library(kableExtra))
+options(knitr.kable.NA = '')
+
 ```
 
 <!-- Première page -->
-```{r, echo=FALSE}
 
-tab = Product()[sort(input$table_rows_selected), ]
+## Positive mode
+```{r positive, echo=FALSE}
+selected_tab = FullTable()[sort(input$table_rows_selected), ]
 
-myTheme <- gridExtra::ttheme_default(base_size = 6,
-                        core=list(
-        bg_params = list(fill=c(rep(c("grey95", "grey90"),
-                                    length.out=nrow(tab)) ),
-                         alpha = rep(c(1,0.5), each=5))
-        ))
+if(any(grepl("Positive", selected_tab$Polarity))){
+  selected_tab %>% 
+    filter(Polarity == "Positive mode") %>%
+    select("Formula", "m/z", "RT", "Transformation", "Delta m/z (ppm)", "Intensity", "Score") %>% 
+    knitr::kable(
+      format = "latex",
+      booktabs = TRUE,
+      longtable = TRUE,
+      linesep = "",
+      align = "c"
+      ) %>%
+    kableExtra::kable_styling(
+        position = "center",
+        latex_options = c("striped", "repeat_header"),
+        stripe_color = "gray!15",
+        font_size = 10
+      ) 
+}
 
-gridExtra::grid.table(
-  tab[input$columns], rows = NULL, theme = myTheme
-)
 
 ```
 
+## Negative mode
+```{r negative, echo=FALSE}
+
+if(any(grepl("Negative", selected_tab$Polarity))){
+  selected_tab %>% 
+    filter(Polarity == "Negative mode") %>%
+    select("Formula", "m/z", "RT", "Transformation", "Delta m/z (ppm)", "Intensity", "Score") %>% 
+    knitr::kable(
+      format = "latex",
+      booktabs = TRUE,
+      longtable = TRUE,
+      linesep = "",
+      align = "c"
+      ) %>%
+    kableExtra::kable_styling(
+        position = "center",
+        latex_options = c("striped", "repeat_header"),
+        stripe_color = "gray!15",
+        font_size = 10
+      ) 
+}
+```
+
 \newpage
-```{r, echo=FALSE, fig.height=15, fig.width=10}
+```{r content, echo=FALSE, fig.height=10, fig.width=10, results='asis'}
 
-myTheme2 <- gridExtra::ttheme_default(base_size = 15,
-                        core=list(
-        bg_params = list(fill=c(rep(c("grey95", "grey90"),
-                                    length.out=nrow(tab)) ),
-                         alpha = rep(c(1,0.5), each=5))
-        ))
-
-for(metabo in 1:nrow(tab)){
-  filename = list.files(path(), recursive = T, pattern = paste0("^", tab$Formula[metabo], "_", tab$Index[metabo], "_"))
-  if(length(filename) > 1) filename = grep(ifelse(tab$Polarity[metabo]=="Positive mode", "plus", "minus"), filename, value=T)
+for(metabo in 1:nrow(selected_tab)){
+  metabo_pol = ifelse(selected_tab$Polarity[metabo]=="Positive mode", "plus", "minus")
+  # Select the image file
+  filename = list.files(path(), recursive = T, pattern = paste0("^", selected_tab$Formula[metabo], "_", selected_tab$Index[metabo], "_"))
   
+  if(length(filename) > 1) filename = grep(metabo_pol, filename, value=T)
   
-  tabname = list.files(path(), recursive = T, pattern = paste0("table_", tab$Formula[metabo], "_", tab$Index[metabo], "_"))
-  if(length(tabname) > 1) tabname = grep(tab$Polarity[metabo], tabname, value=T)
+  # Display image
+  grid.arrange(rasterGrob(readPNG(rsvg_png(file.path(path(), filename), height = 1000, width = 1000))) )
+  
+  # Select the table file
+  tabname = list.files(path(), recursive = T, pattern = paste0("table_", selected_tab$Formula[metabo], "_", selected_tab$Index[metabo], "_"))
+  
+  if(length(tabname) > 1) tabname = grep(metabo_pol, tabname, value=T)
   
   if(length(tabname) == 1){
     tab_match = read_tsv(file.path(path(), tabname), col_types = cols()) 
-    tab_match = tab_match[-which(tab_match$transfo == "No match"), ]
-    
+    tab_match = tab_match %>% filter(transfo!="No match")
     if(nrow(tab_match) > 0){
       num_cols = names(Filter(is.numeric, tab_match))
-      tab_match[num_cols] = apply(tab_match[num_cols], 2, function(x) round(x, 4) )
+      tab_match[num_cols] = tab_match %>% Filter(f=is.numeric) %>% round(4)
       
       # Display the figure and the table of MS2 match, if it exists
-      grid.arrange(rasterGrob(readPNG(rsvg_png(file.path(path(), filename), height = 1500, width = 1500))), 
-                   tableGrob(tab_match, rows=NULL, theme=myTheme2),
-                   nrow=2, heights = c(10,5))
-    }else{
-      grid.arrange( rasterGrob(readPNG(rsvg_png(file.path(path(), filename), height = 1500, width = 1500))) )
+      
+      print(kable_styling(
+              kable(tab_match, 
+                format = "latex",
+                booktabs = TRUE,
+                longtable = TRUE,
+                linesep = "",
+                align = "ccccccccc"),
+              position = "center",
+              latex_options = c("striped", "repeat_header"),
+              stripe_color = "gray!15"
+      ))
     }
-    
-  }else{
-    grid.arrange( rasterGrob(readPNG(rsvg_png(file.path(path(), filename), height = 1500, width = 1500))) )
   }
   
 }

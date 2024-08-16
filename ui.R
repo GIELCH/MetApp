@@ -7,9 +7,12 @@
 #    http://shiny.rstudio.com/
 #
 if(!"pacman" %in% installed.packages()) install.packages("pacman")
-pacman::p_load("shiny", "shinythemes", "shinyFiles", "DT", "shinyjs", "parallel", "shinyalert", "dplyr", "rclipboard","rmarkdown", "rsvg", "uuid")
+pacman::p_load("shiny", "shinythemes", "shinyFiles", "DT", "shinyjs", "parallel", 
+               "shinyalert", "dplyr", "rclipboard","rmarkdown", "rsvg", "rhandsontable")
 
 source("modules/titlePanelMod.R")
+source("modules/launcherMod.R")
+source("modules/visualizationMod.R")
 
 labelMandatory <- function(label) {
   tagList(
@@ -31,35 +34,7 @@ navbarPage("MetApp for MetIDfyR",
                     
                     titlePanelUI(id = "t1", name = "MetIDfyR launcher"),
                     
-                    h4("Required :"),
-                      p("-a TSV file (see Input tab)"),
-                      p("-where to save the output, a suffix with the date and time of run is attached to the directory name"),
-                      p("-a config file (see TEMPLATE_config.R or build it using Configuration tab)"),
-                    
-                    br(),
-                    fluidRow(column(3, tags$b("Path to Rscript if not in PATH"), br(),
-                                    shinyFilesButton("Rscript", "Select Rscript", 
-                                                     "Path to Rscript", multiple = F), br(),
-                                    textOutput("select_Rscript")),
-                            column(3, labelMandatory(tags$b("Path to input file")), br(),
-                                    shinyFilesButton("input", "Select input", 
-                                                     "Path to input file", multiple = F), br(),
-                                    textOutput("select_input")),
-                             column(3, labelMandatory(tags$b("Path to save the output")),br(),
-                                    shinyDirButton("outdir", "Select output", 
-                                                   "Path to save the output"),
-                                    textOutput("select_outdir"))
-                            ),
-                    fluidRow(column(3, tags$b("Path to config file"), br(),
-                                    shinyFilesButton("config", "Select config file", 
-                                                     "Path to config file", multiple = F),
-                                    textOutput("select_config"))
-                             ), 
-                    
-                    textInput("command", label="", width="200%"),
-                    rclipboardSetup(),
-                    fluidRow(column(2, uiOutput("clip")), 
-                             column(1, actionButton("launch", label="Go !", icon = icon("play"), class = "btn-info")))
+                    launcherUI(id="launcher")
                     
                     ),
            
@@ -68,10 +43,9 @@ navbarPage("MetApp for MetIDfyR",
            tabPanel("Input",
                     titlePanelUI(id="t2", "Input file generation"),
                     h4("Fill the following table and save it if you don't have an input TSV."),
-                    p("Double click to modify a value. The file will be saved in the input directory."),
+                    p("The file will be saved in the input directory."),
                     p("Leave the cell EMPTY if there's nothing to put in."),
-                    actionButton("add", "Add row"),
-                    DT::dataTableOutput('mlcTSV'),
+                    rHandsontableOutput('mlcTSV'),
                     br(),
                     textInput("tsvname", "Name of the input TSV"),
                     actionButton("save", "Save tsv", class="btn-info")
@@ -115,7 +89,7 @@ navbarPage("MetApp for MetIDfyR",
                         
                     ),
                     
-                    actionButton("submit", "Submit", class = "btn-info"),
+                    actionButton("submit", "Save config", class = "btn-info"),
                     actionButton("resetbut", "Reset")
            ),
            
@@ -123,50 +97,7 @@ navbarPage("MetApp for MetIDfyR",
            tabPanel("Visualization",
                     # Application title
                     titlePanelUI(id="t4", "Data visualization"),
-                    h4("Here you can visualize the metabolites output produced by MetIDfyR"),
-                    
-                    fluidRow(column(5, tags$b("Comment area"),
-                                    textAreaInput("comment", "", height = "100%", width = "200%", resize = "both"))
-                             ), 
-                    
-                    br(), br(),
-                    h4(textOutput("header")),
-                    shinyDirButton("dir", "Select directory", "Upload"),
-                    downloadButton("report", "Save report"), br(),
-                    
-                    sidebarLayout(
-                      sidebarPanel(
-                        checkboxGroupInput("columns","Select Columns"),
-                        width = 2
-                      ),
-                      
-                      mainPanel(
-                        DT::dataTableOutput('table')
-                      )
-                    )
-                    
-                    ,
-                    
-                    hr(),
-                    
-                    # Add tabsets 
-                    tabsetPanel(type = "tabs", id = "polarity",
-                                tabPanel(title = "Positive", value = "POS", 
-                                         tags$br(),
-                                         fluidRow(column(4, selectInput("POS", "Select a metabolite", choices = NULL)),
-                                                  column(4, selectInput("POS_peak", "Select a peak", choices = NULL))),
-                                         fluidRow(column(8, imageOutput("figure_POS")),
-                                                  column(4, tableOutput("table_POS")))
-                                ),
-                                
-                                tabPanel(title = "Negative", value = "NEG",
-                                         tags$br(),
-                                         fluidRow(column(4, selectInput("NEG", "Select a metabolite", choices = NULL)),
-                                                  column(4, selectInput("NEG_peak", "Select a peak", choices = NULL))),
-                                         fluidRow(column(8, imageOutput("figure_NEG")),
-                                                  column(4, tableOutput("table_NEG")))
-                                )
-                    )
+                    visualizationUI(id = "visual")
            )
            
            
